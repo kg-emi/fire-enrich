@@ -2,18 +2,18 @@ import { EmailContext, RowEnrichmentResult } from './core/types';
 import { EnrichmentResult, SearchResult, EnrichmentField } from '../types';
 import { parseEmail } from '../strategies/email-parser';
 import { FirecrawlService } from '../services/firecrawl';
-import { OpenAIService } from '../services/openai';
+import { GeminiService } from '../services/gemini';
 
 export class AgentOrchestrator {
   private firecrawl: FirecrawlService;
-  private openai: OpenAIService;
+  private gemini: GeminiService;
   
   constructor(
     private firecrawlApiKey: string,
-    private openaiApiKey: string
+    private geminiApiKey: string
   ) {
     this.firecrawl = new FirecrawlService(firecrawlApiKey);
-    this.openai = new OpenAIService(openaiApiKey);
+    this.gemini = new GeminiService(geminiApiKey);
   }
   
   async enrichRow(

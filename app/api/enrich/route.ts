@@ -50,12 +50,12 @@ export async function POST(request: NextRequest) {
     activeSessions.set(sessionId, abortController);
 
     // Check environment variables and headers for API keys
-    const openaiApiKey = process.env.OPENAI_API_KEY || request.headers.get('X-OpenAI-API-Key');
+    const geminiApiKey = process.env.GEMINI_API_KEY || request.headers.get('X-Gemini-API-Key');
     const firecrawlApiKey = process.env.FIRECRAWL_API_KEY || request.headers.get('X-Firecrawl-API-Key');
     
-    if (!openaiApiKey || !firecrawlApiKey) {
+    if (!geminiApiKey || !firecrawlApiKey) {
       console.error('Missing API keys:', { 
-        hasOpenAI: !!openaiApiKey, 
+        hasGemini: !!geminiApiKey, 
         hasFirecrawl: !!firecrawlApiKey 
       });
       return NextResponse.json(
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     
     console.log(`[STRATEGY] Using ${strategyName} - Advanced multi-agent architecture with specialized agents`);
     const enrichmentStrategy = new AgentEnrichmentStrategy(
-      openaiApiKey,
+      geminiApiKey,
       firecrawlApiKey
     );
 

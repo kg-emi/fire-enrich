@@ -32,12 +32,12 @@ export default function HomePage() {
   const [isCheckingEnv, setIsCheckingEnv] = useState(true);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [firecrawlApiKey, setFirecrawlApiKey] = useState<string>('');
-  const [openaiApiKey, setOpenaiApiKey] = useState<string>('');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [isValidatingApiKey, setIsValidatingApiKey] = useState(false);
   const [missingKeys, setMissingKeys] = useState<{
     firecrawl: boolean;
-    openai: boolean;
-  }>({ firecrawl: false, openai: false });
+    gemini: boolean;
+  }>({ firecrawl: false, gemini: false });
   const [pendingCSVData, setPendingCSVData] = useState<{
     rows: CSVRow[];
     columns: string[];
@@ -53,7 +53,7 @@ export default function HomePage() {
         }
         const data = await response.json();
         const hasFirecrawl = data.environmentStatus.FIRECRAWL_API_KEY;
-        const hasOpenAI = data.environmentStatus.OPENAI_API_KEY;
+        const hasGemini = data.environmentStatus.GEMINI_API_KEY;
         
         if (!hasFirecrawl) {
           // Check localStorage for saved API key
@@ -63,11 +63,11 @@ export default function HomePage() {
           }
         }
         
-        if (!hasOpenAI) {
+        if (!hasGemini) {
           // Check localStorage for saved API key
-          const savedKey = localStorage.getItem('openai_api_key');
+          const savedKey = localStorage.getItem('gemini_api_key');
           if (savedKey) {
-            setOpenaiApiKey(savedKey);
+            setGeminiApiKey(savedKey);
           }
         }
       } catch (error) {
@@ -85,16 +85,16 @@ export default function HomePage() {
     const response = await fetch('/api/check-env');
     const data = await response.json();
     const hasFirecrawl = data.environmentStatus.FIRECRAWL_API_KEY;
-    const hasOpenAI = data.environmentStatus.OPENAI_API_KEY;
+    const hasGemini = data.environmentStatus.GEMINI_API_KEY;
     const savedFirecrawlKey = localStorage.getItem('firecrawl_api_key');
-    const savedOpenAIKey = localStorage.getItem('openai_api_key');
+    const savedGeminiKey = localStorage.getItem('gemini_api_key');
 
-    if ((!hasFirecrawl && !savedFirecrawlKey) || (!hasOpenAI && !savedOpenAIKey)) {
+    if ((!hasFirecrawl && !savedFirecrawlKey) || (!hasGemini && !savedGeminiKey)) {
       // Save the CSV data temporarily and show API key modal
       setPendingCSVData({ rows, columns });
       setMissingKeys({
         firecrawl: !hasFirecrawl && !savedFirecrawlKey,
-        openai: !hasOpenAI && !savedOpenAIKey,
+        gemini: !hasGemini && !savedGeminiKey,
       });
       setShowApiKeyModal(true);
     } else {
@@ -133,20 +133,20 @@ export default function HomePage() {
     const response = await fetch('/api/check-env');
     const data = await response.json();
     const hasEnvFirecrawl = data.environmentStatus.FIRECRAWL_API_KEY;
-    const hasEnvOpenAI = data.environmentStatus.OPENAI_API_KEY;
+    const hasEnvGemini = data.environmentStatus.GEMINI_API_KEY;
     const hasSavedFirecrawl = localStorage.getItem('firecrawl_api_key');
-    const hasSavedOpenAI = localStorage.getItem('openai_api_key');
+    const hasSavedGemini = localStorage.getItem('gemini_api_key');
     
     const needsFirecrawl = !hasEnvFirecrawl && !hasSavedFirecrawl;
-    const needsOpenAI = !hasEnvOpenAI && !hasSavedOpenAI;
+    const needsGemini = !hasEnvGemini && !hasSavedGemini;
 
     if (needsFirecrawl && !firecrawlApiKey.trim()) {
       toast.error('Please enter a valid Firecrawl API key');
       return;
     }
     
-    if (needsOpenAI && !openaiApiKey.trim()) {
-      toast.error('Please enter a valid OpenAI API key');
+    if (needsGemini && !geminiApiKey.trim()) {
+      toast.error('Please enter a valid Gemini API key');
       return;
     }
 
@@ -163,18 +163,17 @@ export default function HomePage() {
           },
           body: JSON.stringify({ url: 'https://example.com' }),
         });
-
-        if (!response.ok) {
-          throw new Error('Invalid Firecrawl API key');
+        const result = await response.json();
+        if (!response.ok || result.success === false) {
+          throw new Error(result.error || 'Invalid Firecrawl API key');
         }
-        
         // Save the API key to localStorage
         localStorage.setItem('firecrawl_api_key', firecrawlApiKey);
       }
       
-      // Save OpenAI API key if provided
-      if (openaiApiKey) {
-        localStorage.setItem('openai_api_key', openaiApiKey);
+      // Save Gemini API key if provided
+      if (geminiApiKey) {
+        localStorage.setItem('gemini_api_key', geminiApiKey);
       }
 
       toast.success('API keys saved successfully!');
@@ -344,27 +343,27 @@ export default function HomePage() {
               </>
             )}
             
-            {missingKeys.openai && (
+            {missingKeys.gemini && (
               <>
                 <Button
-                  onClick={() => window.open('https://platform.openai.com/api-keys', '_blank')}
+                  onClick={() => window.open('https://console.cloud.google.com/ai/generative', '_blank')}
                   variant="outline"
                   size="sm"
                   className="flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  Get OpenAI API Key
+                  Get Gemini API Key
                 </Button>
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="openai-key" className="text-sm font-medium">
-                    OpenAI API Key
+                  <label htmlFor="gemini-key" className="text-sm font-medium">
+                    Gemini API Key
                   </label>
                   <Input
-                    id="openai-key"
+                    id="gemini-key"
                     type="password"
-                    placeholder="sk-..."
-                    value={openaiApiKey}
-                    onChange={(e) => setOpenaiApiKey(e.target.value)}
+                    placeholder="gi-..."
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !isValidatingApiKey) {
                         handleApiKeySubmit();

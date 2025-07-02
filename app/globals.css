@@ -445,3 +445,86 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--foreground);
 }
+
+/* Enhanced UI Styles for Improved Visibility */
+@layer components {
+  .btn-primary, .btn-code {
+    @apply bg-gradient-primary text-white font-semibold shadow-lg hover:shadow-xl;
+  }
+  .btn-code {
+    @apply px-4 py-2 rounded;
+  }
+  input, .input {
+    @apply bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 focus:border-red-500 focus:ring-1 focus:ring-red-500;
+  }
+  table {
+    @apply w-full text-left border-collapse;
+  }
+  thead tr {
+    @apply bg-gradient-to-r from-red-600 to-yellow-500 text-white;
+  }
+  tbody tr:nth-child(even) {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+  td, th {
+    @apply p-3 border border-gray-200 dark:border-gray-700;
+  }
+  .dialog-content {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  }
+  .dialog-footer button {
+    @apply font-semibold;
+  }
+  .toast {
+    @apply text-white;
+  }
+}
+
+/* High-contrast text */
+:root {
+  --foreground: 0 0% 0%; /* Black text on light background */
+}
+.dark {
+  --foreground: 0 0% 100%; /* White text on dark background */
+}
+body, h1, h2, h3, h4, h5, p, a, button, input, label, span {
+  color: hsl(var(--foreground));
+}
+
+/* Table header high contrast */
+table thead th {
+  background: hsl(0, 0%, 0%);
+  color: hsl(0, 0%, 100%);
+  font-weight: bold;
+}
+
+table tbody tr:nth-child(odd) {
+  background-color: hsl(0,0%,95%);
+}
+table tbody tr:nth-child(even) {
+  background-color: hsl(0,0%,85%);
+}
+
+/* Buttons high visibility */
+button, .btn-primary, .btn-code {
+  background: linear-gradient(135deg, #ff4500 0%, #ff8c00 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+button:hover, .btn-primary:hover, .btn-code:hover {
+  opacity: 0.9;
+}
+
+/* Inputs high visibility */
+input, textarea, .input {
+  background: #fff;
+  color: #000;
+  border: 2px solid #ff4500;
+  padding: 0.5rem;
+}
+input:focus, textarea:focus {
+  outline: none;
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 3px rgba(255,140,0,0.3);
+}

@@ -1,13 +1,45 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI, GenerationConfig, Content, Part } from "@google/generative-ai";
 import { z } from 'zod';
-import { zodResponseFormat } from 'openai/helpers/zod';
-import type { EnrichmentField, EnrichmentResult } from '../types';
+import type { EnrichmentField } from '../types';
 
-export class OpenAIService {
-  private client: OpenAI;
+function zodToGeminiSchema(zodSchema: z.ZodObject<any>): any {
+  const schema = zodSchema.shape;
+  const properties: Record<string, any> = {};
+  const required: string[] = [];
 
-  constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+  for (const key in schema) {
+    const field = schema[key];
+    const isOptional = field.isOptional();
+    if (!isOptional) {
+      required.push(key);
+    }
+
+    let type = 'string';
+    if (field instanceof z.ZodNumber) {
+      type = 'number';
+    } else if (field instanceof z.ZodBoolean) {
+      type = 'boolean';
+    } else if (field instanceof z.ZodArray) {
+      type = 'array';
+    }
+
+    properties[key] = { type };
+  }
+
+  return {
+    type: 'object',
+    properties,
+    required,
+  };
+}
+
+export class GeminiService {
+  private client: GoogleGenerativeAI;
+  private model: string;
+
+  constructor(apiKey: string, model: string = 'gemini-1.5-flash') {
+    this.client = new GoogleGenerativeAI(apiKey);
+    this.model = model;
   }
 
   createEnrichmentSchema(fields: EnrichmentField[]) {
@@ -817,43 +849,99 @@ ${schemaDescription}
     }
   }
 
-  async generateSearchQueries(
-    context: Record<string, string>,
-    targetField: string,
-    existingQueries: string[] = []
-  ): Promise<string[]> {
-    try {
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: `Generate effective search queries to find information about "${targetField}" for the given entity.
-            
-Rules:
-1. Generate 2-3 different search queries
-2. Use various search strategies (company name + field, person name + company, domain search, etc.)
-3. Make queries specific and likely to return relevant results
-4. Avoid queries that are too generic
-5. If email is provided, intelligently parse it to extract useful components`,
-          },
-          {
-            role: 'user',
-            content: `Context: ${JSON.stringify(context)}
-            
-Previous queries tried: ${existingQueries.join(', ')}
-            
-Generate new search queries to find: ${targetField}`,
-          },
-        ],
-        response_format: { type: 'json_object' },
+  async generateEnrichment(fields: EnrichmentField[], context: string): Promise<any> {
+    const schema = this.createEnrichmentSchema(fields);
+    const generationConfig: GenerationConfig = {
+      response_mime_type: "application/json",
+    };
+    const model = this.client.getGenerativeModel({ model: this.model, generationConfig, tools: [{ function_declarations: [{ name: 'enrichment_data', description: 'Extracts information from the provided context.', parameters: zodToGeminiSchema(schema) }] }] });
+
+    const prompt = `Given the following context, enrich the data based on the provided schema:\n\nContext:\n${context}`;
+
+    const result = await model.generateContent(prompt as Content);
+    const response = await result.response;
+    const call = response.functionCalls();
+    if (call && call.length > 0) {
+        return call[0].args;
+    }
+    return JSON.parse(response.text());
+  }
+
+  createCorroboratedEnrichmentSchema(fields: EnrichmentField[]) {
+    const schemaProperties: Record<string, z.ZodTypeAny> = {};
+
+    fields.forEach(field => {
+      // Create typed schema for value based on field type
+      let valueSchema: z.ZodTypeAny;
+      switch (field.type) {
+        case 'string':
+          valueSchema = z.string();
+          break;
+        case 'number':
+          valueSchema = z.number();
+          break;
+        case 'boolean':
+          valueSchema = z.boolean();
+          break;
+        case 'array':
+          valueSchema = z.array(z.string());
+          break;
+        default:
+          valueSchema = z.string();
+      }
+      // Make it nullable since evidence might not find the value
+      valueSchema = valueSchema.nullable();
+
+      // Each field has an array of evidence from different sources
+      const evidenceSchema = z.object({
+        value: valueSchema, // Use typed schema instead of z.any()
+        source_url: z.string(), // Which URL this came from
+        exact_text: z.string(), // The exact text where this was found
+        confidence: z.number().min(0).max(1), // Confidence for this specific source
       });
 
-      const result = JSON.parse(response.choices[0].message.content || '{}');
-      return result.queries || [];
-    } catch (error) {
-      console.error('Query generation error:', error);
-      return [];
+      schemaProperties[field.name] = z.object({
+        evidence: z.array(evidenceSchema),
+        consensus_value: valueSchema, // Use same typed schema for consensus
+        consensus_confidence: z.number().min(0).max(1), // Overall confidence
+        sources_agree: z.boolean(), // Do all sources agree on the value?
+      });
+    });
+
+    return z.object(schemaProperties);
+  }
+
+  async generateCorroboratedEnrichment(fields: EnrichmentField[], context: string): Promise<any> {
+    const schema = this.createCorroboratedEnrichmentSchema(fields);
+    const generationConfig: GenerationConfig = {
+      response_mime_type: "application/json",
+    };
+    const model = this.client.getGenerativeModel({ model: this.model, generationConfig, tools: [{ function_declarations: [{ name: 'corroborated_data', description: 'Extracts and corroborates information from the provided context.', parameters: zodToGeminiSchema(schema) }] }] });
+
+    const prompt = `Given the following context, enrich and corroborate the data based on the provided schema:\n\nContext:\n${context}`;
+
+    const result = await model.generateContent(prompt as Content);
+    const response = await result.response;
+    const call = response.functionCalls();
+    if (call && call.length > 0) {
+        return call[0].args;
+    }
+    return JSON.parse(response.text());
+  }
+  
+  /**
+   * Generate structured fields based on a natural language prompt using Gemini.
+   */
+  async generateFields(prompt: string): Promise<any> {
+    // Use a simple chat generation for field suggestions
+    const model = this.client.getGenerativeModel({ model: this.model });
+    const result = await model.generateContent(prompt as Content);
+    const response = await result.response;
+    // Attempt to parse JSON content
+    try {
+      return JSON.parse(response.text());
+    } catch (e) {
+      throw new Error('Failed to parse Gemini response for field generation');
     }
   }
 }

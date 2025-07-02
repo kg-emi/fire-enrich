@@ -83,7 +83,7 @@ export function EnrichmentTable({ rows, fields, emailColumn }: EnrichmentTablePr
     try {
       // Get API keys from localStorage if not in environment
       const firecrawlApiKey = localStorage.getItem('firecrawl_api_key');
-      const openaiApiKey = localStorage.getItem('openai_api_key');
+      const geminiApiKey = localStorage.getItem('gemini_api_key');
       
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -94,11 +94,11 @@ export function EnrichmentTable({ rows, fields, emailColumn }: EnrichmentTablePr
       if (firecrawlApiKey) {
         headers['X-Firecrawl-API-Key'] = firecrawlApiKey;
       }
-      if (openaiApiKey) {
-        headers['X-OpenAI-API-Key'] = openaiApiKey;
+      if (geminiApiKey) {
+        headers['X-Gemini-API-Key'] = geminiApiKey;
       }
       
-      const response = await fetch('/api/enrich', {
+    const response = await fetch('/api/enrich', {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -110,9 +110,19 @@ export function EnrichmentTable({ rows, fields, emailColumn }: EnrichmentTablePr
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to start enrichment');
-      }
+    if (!response.ok) {
+      // Show server error message if available
+      let errorMsg = 'Failed to start enrichment';
+      try {
+        const errData = await response.json();
+        if (errData.error) {
+          errorMsg = errData.error;
+        }
+      } catch {}
+      toast.error(errorMsg);
+      setStatus('idle');
+      return;
+    }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -202,17 +212,21 @@ export function EnrichmentTable({ rows, fields, emailColumn }: EnrichmentTablePr
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start enrichment:', error);
-      setStatus('completed');
+      // Show error to user
+      toast.error(error.message || 'Failed to start enrichment');
+      // Reset status to idle to allow retry
+      setStatus('idle');
     }
   }, [fields, rows, emailColumn, useAgents]);
 
+  // Automatically start enrichment once when component mounts
   useEffect(() => {
-    if (status === 'idle') {
+    if (status === 'idle' && sessionId === null) {
       startEnrichment();
     }
-  }, [startEnrichment, status]); // Add proper dependencies
+  }, [startEnrichment, status, sessionId]);
 
   const cancelEnrichment = async () => {
     if (sessionId) {
